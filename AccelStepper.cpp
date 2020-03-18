@@ -16,7 +16,7 @@
 #undef HIGH
 #define HIGH 1
 #undef LOW
-#define LOW 1
+#define LOW 0
 
 #if 0
 // Some debugging assistance

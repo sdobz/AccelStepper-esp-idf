@@ -4,9 +4,9 @@ Usage:
 Include in your projects "components" directory
 
 Status:
-Not currently working
+Might be working
 
 TODO:
-* Get it working
+* Test more thoroughly
 * Create abstractions around FreeRTOS tasks
 * Port examples to esp32
