@@ -4,6 +4,19 @@
 // $Id: AccelStepper.cpp,v 1.23 2016/08/09 00:39:10 mikem Exp $
 
 #include "AccelStepper.h"
+#include "esp_timer.h"
+#include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#undef max
+#define max(a,b) ((a)>(b)?(a):(b))
+#undef constrain
+#define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+#undef HIGH
+#define HIGH 1
+#undef LOW
+#define LOW 1
 
 #if 0
 // Some debugging assistance
@@ -13,10 +26,10 @@ void dump(uint8_t* p, int l)
 
     for (i = 0; i < l; i++)
     {
-	Serial.print(p[i], HEX);
-	Serial.print(" ");
+	printf("%i", p[i], HEX); // ??
+	printf(" ");
     }
-    Serial.println("");
+    printf("\n");
 }
 #endif
 
@@ -38,13 +51,13 @@ void AccelStepper::move(long relative)
 // Implements steps according to the current step interval
 // You must call this at least once per step
 // returns true if a step occurred
-boolean AccelStepper::runSpeed()
+bool AccelStepper::runSpeed()
 {
     // Dont do anything unless we actually have a step interval
     if (!_stepInterval)
 	return false;
 
-    unsigned long time = micros();   
+    int64_t time = esp_timer_get_time();
     if (time - _lastStepTime >= _stepInterval)
     {
 	if (_direction == DIRECTION_CW)
@@ -164,15 +177,15 @@ void AccelStepper::computeNewSpeed()
 	_speed = -_speed;
 
 #if 0
-    Serial.println(_speed);
-    Serial.println(_acceleration);
-    Serial.println(_cn);
-    Serial.println(_c0);
-    Serial.println(_n);
-    Serial.println(_stepInterval);
-    Serial.println(distanceTo);
-    Serial.println(stepsToStop);
-    Serial.println("-----");
+    printf("%f\n", _speed);
+    printf("%f\n", _acceleration);
+    printf("%f\n", _cn);
+    printf("%f\n", _c0);
+    printf("%ld\n", _n);
+    printf("%lu\n", _stepInterval);
+    printf("%ld\n", distanceTo);
+    printf("%ld\n", stepsToStop);
+    printf("-----\n");
 #endif
 }
 
@@ -180,14 +193,14 @@ void AccelStepper::computeNewSpeed()
 // You must call this at least once per step, preferably in your main loop
 // If the motor is in the desired position, the cost is very small
 // returns true if the motor is still running to the target position.
-boolean AccelStepper::run()
+bool AccelStepper::run()
 {
     if (runSpeed())
 	computeNewSpeed();
     return _speed != 0.0 || distanceToGo() != 0;
 }
 
-AccelStepper::AccelStepper(uint8_t interface, uint8_t pin1, uint8_t pin2, uint8_t pin3, uint8_t pin4, bool enable)
+AccelStepper::AccelStepper(uint8_t interface, gpio_num_t pin1, gpio_num_t pin2, gpio_num_t pin3, gpio_num_t pin4, bool enable)
 {
     _interface = interface;
     _currentPos = 0;
@@ -198,7 +211,7 @@ AccelStepper::AccelStepper(uint8_t interface, uint8_t pin1, uint8_t pin2, uint8_
     _sqrt_twoa = 1.0;
     _stepInterval = 0;
     _minPulseWidth = 1;
-    _enablePin = 0xff;
+    _enablePin = (gpio_num_t) 0xff;
     _lastStepTime = 0;
     _pin[0] = pin1;
     _pin[1] = pin2;
@@ -233,12 +246,12 @@ AccelStepper::AccelStepper(void (*forward)(), void (*backward)())
     _sqrt_twoa = 1.0;
     _stepInterval = 0;
     _minPulseWidth = 1;
-    _enablePin = 0xff;
+    _enablePin = (gpio_num_t) 0xff;
     _lastStepTime = 0;
-    _pin[0] = 0;
-    _pin[1] = 0;
-    _pin[2] = 0;
-    _pin[3] = 0;
+    _pin[0] = (gpio_num_t) 0;
+    _pin[1] = (gpio_num_t) 0;
+    _pin[2] = (gpio_num_t) 0;
+    _pin[3] = (gpio_num_t) 0;
     _forward = forward;
     _backward = backward;
 
@@ -363,7 +376,7 @@ void AccelStepper::setOutputPins(uint8_t mask)
 	numpins = 3;
     uint8_t i;
     for (i = 0; i < numpins; i++)
-	digitalWrite(_pin[i], (mask & (1 << i)) ? (HIGH ^ _pinInverted[i]) : (LOW ^ _pinInverted[i]));
+	gpio_set_level(_pin[i], (mask & (1 << i)) ? (HIGH ^ _pinInverted[i]) : (LOW ^ _pinInverted[i]));
 }
 
 // 0 pin step function (ie for functional usage)
@@ -388,7 +401,7 @@ void AccelStepper::step1(long step)
     setOutputPins(_direction ? 0b11 : 0b01); // step HIGH
     // Caution 200ns setup time 
     // Delay the minimum allowed pulse width
-    delayMicroseconds(_minPulseWidth);
+    vTaskDelay(_minPulseWidth / (portTICK_RATE_MS * 1000));
     setOutputPins(_direction ? 0b10 : 0b00); // step LOW
 }
 
@@ -547,32 +560,39 @@ void    AccelStepper::disableOutputs()
     setOutputPins(0); // Handles inversion automatically
     if (_enablePin != 0xff)
     {
-        pinMode(_enablePin, OUTPUT);
-        digitalWrite(_enablePin, LOW ^ _enableInverted);
+        gpio_pad_select_gpio(_enablePin);
+        gpio_set_direction(_enablePin, GPIO_MODE_OUTPUT);
+	    gpio_set_level(_enablePin, LOW ^ _enableInverted);
     }
 }
 
 void    AccelStepper::enableOutputs()
 {
     if (! _interface) 
-	return;
+	    return;
 
-    pinMode(_pin[0], OUTPUT);
-    pinMode(_pin[1], OUTPUT);
+    gpio_pad_select_gpio(_pin[0]);
+    gpio_set_direction(_pin[0], GPIO_MODE_OUTPUT);
+    gpio_pad_select_gpio(_pin[1]);
+    gpio_set_direction(_pin[1], GPIO_MODE_OUTPUT);
     if (_interface == FULL4WIRE || _interface == HALF4WIRE)
     {
-        pinMode(_pin[2], OUTPUT);
-        pinMode(_pin[3], OUTPUT);
+        gpio_pad_select_gpio(_pin[2]);
+        gpio_set_direction(_pin[2], GPIO_MODE_OUTPUT);
+        gpio_pad_select_gpio(_pin[3]);
+        gpio_set_direction(_pin[3], GPIO_MODE_OUTPUT);
     }
     else if (_interface == FULL3WIRE || _interface == HALF3WIRE)
     {
-        pinMode(_pin[2], OUTPUT);
+        gpio_pad_select_gpio(_pin[2]);
+        gpio_set_direction(_pin[2], GPIO_MODE_OUTPUT);
     }
 
     if (_enablePin != 0xff)
     {
-        pinMode(_enablePin, OUTPUT);
-        digitalWrite(_enablePin, HIGH ^ _enableInverted);
+        gpio_pad_select_gpio(_enablePin);
+        gpio_set_direction(_enablePin, GPIO_MODE_OUTPUT);
+	    gpio_set_level(_enablePin, HIGH ^ _enableInverted);
     }
 }
 
@@ -581,15 +601,16 @@ void AccelStepper::setMinPulseWidth(unsigned int minWidth)
     _minPulseWidth = minWidth;
 }
 
-void AccelStepper::setEnablePin(uint8_t enablePin)
+void AccelStepper::setEnablePin(gpio_num_t enablePin)
 {
     _enablePin = enablePin;
 
     // This happens after construction, so init pin now.
     if (_enablePin != 0xff)
     {
-        pinMode(_enablePin, OUTPUT);
-        digitalWrite(_enablePin, HIGH ^ _enableInverted);
+        gpio_pad_select_gpio(_enablePin);
+        gpio_set_direction(_enablePin, GPIO_MODE_OUTPUT);
+	    gpio_set_level(_enablePin, HIGH ^ _enableInverted);
     }
 }
 
@@ -616,7 +637,7 @@ void AccelStepper::runToPosition()
 	;
 }
 
-boolean AccelStepper::runSpeedToPosition()
+bool AccelStepper::runSpeedToPosition()
 {
     if (_targetPos == _currentPos)
 	return false;

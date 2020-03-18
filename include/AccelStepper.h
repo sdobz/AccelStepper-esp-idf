@@ -255,12 +255,8 @@
 #define AccelStepper_h
 
 #include <stdlib.h>
-#if ARDUINO >= 100
-#include <Arduino.h>
-#else
-#include <WProgram.h>
-#include <wiring.h>
-#endif
+#include "esp_system.h"
+#include "driver/gpio.h"
 
 // These defs cause trouble on some versions of Arduino
 #undef round
@@ -359,7 +355,7 @@ public:
     /// to pin 5.
     /// \param[in] enable If this is true (the default), enableOutputs() will be called to enable
     /// the output pins at construction time.
-    AccelStepper(uint8_t interface = AccelStepper::FULL4WIRE, uint8_t pin1 = 2, uint8_t pin2 = 3, uint8_t pin3 = 4, uint8_t pin4 = 5, bool enable = true);
+    AccelStepper(uint8_t interface = AccelStepper::FULL4WIRE, gpio_num_t pin1 = (gpio_num_t) 2, gpio_num_t pin2 = (gpio_num_t) 3, gpio_num_t pin3 = (gpio_num_t) 4, gpio_num_t pin4 = (gpio_num_t) 5, bool enable = true);
 
     /// Alternate Constructor which will call your own functions for forward and backward steps. 
     /// You can have multiple simultaneous steppers, all moving
@@ -390,13 +386,13 @@ public:
     /// preferably in your main loop. Note that each call to run() will make at most one step, and then only when a step is due,
     /// based on the current speed and the time since the last step.
     /// \return true if the motor is still running to the target position.
-    boolean run();
+    bool run();
 
     /// Poll the motor and step it if a step is due, implementing a constant
     /// speed as set by the most recent call to setSpeed(). You must call this as
     /// frequently as possible, but at least once per step interval,
     /// \return true if the motor was stepped.
-    boolean runSpeed();
+    bool runSpeed();
 
     /// Sets the maximum permitted speed. The run() function will accelerate
     /// up to the speed set by this function.
@@ -463,7 +459,7 @@ public:
     /// Runs at the currently selected speed until the target position is reached.
     /// Does not implement accelerations.
     /// \return true if it stepped
-    boolean runSpeedToPosition();
+    bool runSpeedToPosition();
 
     /// Moves the motor (with acceleration/deceleration)
     /// to the new target position and blocks until it is at
@@ -502,7 +498,7 @@ public:
     /// is called.
     /// \param[in] enablePin Arduino digital pin number for motor enable
     /// \sa setPinsInverted
-    void    setEnablePin(uint8_t enablePin = 0xff);
+    void    setEnablePin(gpio_num_t enablePin = (gpio_num_t) 0xff);
 
     /// Sets the inversion for stepper driver pins
     /// \param[in] directionInvert True for inverted direction pin, false for non-inverted
@@ -605,7 +601,7 @@ protected:
 
     /// Current direction motor is spinning in
     /// Protected because some peoples subclasses need it to be so
-    boolean _direction; // 1 == CW
+    bool _direction; // 1 == CW
     
 private:
     /// Number of pins on the stepper motor. Permits 2 or 4. 2 pins is a
@@ -614,7 +610,7 @@ private:
 
     /// Arduino pin number assignments for the 2 or 4 pins required to interface to the
     /// stepper motor or driver
-    uint8_t        _pin[4];
+    gpio_num_t     _pin[4];
 
     /// Whether the _pins is inverted or not
     uint8_t        _pinInverted[4];
@@ -659,7 +655,7 @@ private:
     bool           _enableInverted;
 
     /// Enable pin for stepper driver, or 0xFF if unused.
-    uint8_t        _enablePin;
+    gpio_num_t     _enablePin;
 
     /// The pointer to a forward-step procedure
     void (*_forward)();

@@ -4,12 +4,7 @@
 #define MultiStepper_h
 
 #include <stdlib.h>
-#if ARDUINO >= 100
-#include <Arduino.h>
-#else
-#include <WProgram.h>
-#include <wiring.h>
-#endif
+#include "esp_system.h"
 
 #define MULTISTEPPER_MAX_STEPPERS 10
 
@@ -40,7 +35,7 @@ public:
     /// There is an upper limit of MULTISTEPPER_MAX_STEPPERS = 10 to the number of steppers that can be managed
     /// \param[in] stepper Reference to a stepper to add to the managed list
     /// \return true if successful. false if the number of managed steppers would exceed MULTISTEPPER_MAX_STEPPERS
-    boolean addStepper(AccelStepper& stepper);
+    bool addStepper(AccelStepper& stepper);
 
     /// Set the target positions of all managed steppers 
     /// according to a coordinate array.
@@ -54,7 +49,7 @@ public:
     /// Calls runSpeed() on all the managed steppers
     /// that have not acheived their target position.
     /// \return true if any stepper is still in the process of running to its target position.
-    boolean run();
+    bool run();
 
     /// Runs all managed steppers until they acheived their target position.
     /// Blocks until all that position is acheived. If you dont
